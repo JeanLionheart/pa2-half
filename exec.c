@@ -1,4 +1,5 @@
 #include "../local-include/decode.h"
+// #include"/home/wang/ics2020/nemu/include/debug.h"
 #include "all-instr.h"
 #include <cpu/exec.h>
 #include <string.h>
@@ -38,10 +39,12 @@ static inline def_EHelper(gp2)
     switch (s->isa.ext_opcode)
     {
         EXW(4, shl, -1)
-        EXW(7, sar, -1) // sar cv,need debug
+        EXW(5, shr, -1)
+        EXW(7, sar, -1) // sar cv,need debug shr
     default:
         printf("\nEMPTY GROUP2, %d\n", s->isa.ext_opcode);
-        assert(0);
+        // assert(0);
+        exec_inv(s);
     }
 }
 
@@ -50,13 +53,16 @@ static inline def_EHelper(gp3)
 {
     switch (s->isa.ext_opcode)
     {
-        IDEXW(0x0,test_I,test,-1)
-        EXW(0x2,not,-1)//not
+        IDEXW(0x0, test_I, test, -1)
+        EXW(0x2, not, -1) // not
         EXW(0x3, neg, -1)
+        EXW(0x4, mul, -1)   // mul
+        EXW(0x5, imul1, -1) // imul
         EXW(7, idiv, -1)
     default:
         printf("\nEMPTY GROUP3, %d\n", s->isa.ext_opcode);
-        assert(0);
+        // assert(0);
+        exec_inv(s);
     }
 }
 
@@ -67,24 +73,27 @@ static inline def_EHelper(gp4)
     {
     default:
         printf("\nEMPTY GROUP4, %d\n", s->isa.ext_opcode);
-        assert(0);
+        // assert(0);
+        exec_inv(s);
         // exec_test
     }
 }
 
 /* 0xff */
-static inline def_EHelper(gp5)
+static inline def_EHelper(gp5) // 0xff 15 bc 01
 {
     switch (s->isa.ext_opcode)
     {
         EX(0x0, inc)
-        EX(0x2,call_rm)
+        EX(0x2, call_rm)
         // exec_call_rm
         // decode_E2G
+        EX(0x4, jmp_rm) // JMP Ev
         EXW(0x6, push, -1)
     default:
         printf("\nEMPTY GROUP5, %d\n", s->isa.ext_opcode);
-        assert(0);
+        exec_inv(s);
+        // assert(0);
     }
 }
 
@@ -95,11 +104,12 @@ static inline def_EHelper(gp7)
     {
     default:
         printf("\nEMPTY GROUP7, %d\n", s->isa.ext_opcode);
-        assert(0);
+        // assert(0);
+        exec_inv(s);
     }
 }
 
-static inline def_EHelper(2byte_esc)
+static inline def_EHelper(2byte_esc) // 0x
 {
     uint8_t opcode = instr_fetch(&s->seq_pc, 1);
     s->opcode = opcode;
@@ -118,11 +128,11 @@ static inline def_EHelper(2byte_esc)
         // decode_E2G
         // exec_imul2
         // exec_test
-        IDEXW(0xb6, mov_E2G, mov, 1) // width=?
-        IDEXW(0xb7,mov_E2G,movzx,2)//TODO
+        IDEXW(0xb6, mov_E2G, mov, 1)   // width=?
+        IDEXW(0xb7, mov_E2G, movzx, 2) // operand_size 16
         // decode_mov_E2G
         IDEXW(0xbe, mov_E2G, movsx, 1)
-        IDEXW(0xbf,mov_E2G,movsx,2)//TODO
+        IDEXW(0xbf, mov_E2G, movsx, 2) // operand_size 16
         // decode_mov_E2G
         // exec_mov
     default:
@@ -185,9 +195,9 @@ void printpc(DecodeExecState *s)
     int true_pc;
     true_pc = s->seq_pc - first_pc;
 
-    if (true_pc == 0x30)
+    if (true_pc == 0x6d)
     {
-        times++;
+        // times++;
         isa_reg_display();
         // exec_test
         char pc[200];
@@ -195,25 +205,24 @@ void printpc(DecodeExecState *s)
         printf("pc: %s\n", pc);
         // printf("loop times is %d\n", times_loop);
         printf("cpu.eflags.ZF is %d\n", cpu.eflags.ZF);
-        // printf("cpu.eflags.SF is %d\n", cpu.eflags.SF);
-        // printf("cpu.eflags.OF is %d\n", cpu.eflags.OF);
-        printf("s0 is: %d\n", *s0);
+        printf("cpu.eflags.SF is %d\n", cpu.eflags.SF);
+        printf("cpu.eflags.OF is %d\n", cpu.eflags.OF);
+        // printf("s0 is: %d\n", *s0);
 
-        // uint32_t addr = 0x100480;
+        // uint32_t addr = 0x1001b0;
         // int paddr = 0;
         // rtl_lm(s, (uint32_t *)&paddr, &addr, 0, 4);
         // printf("Mem here is: %d\n", paddr);
-        if (times == 1)
-            _exit(1);
+        // if (times == 1)
+        _exit(1);
     }
-    // exec_jcc
     // if(true_pc == 0x37){
     //     isa_reg_display();
     //     // _exit(1);
     //     sleep(1);
     // }
 }
-//killlist:recursion,shift,shuixianhua,addlong
+// killlist:addlong
 static inline void fetch_decode_exec(DecodeExecState *s)
 {
     uint8_t opcode;
@@ -234,14 +243,17 @@ again:
         IDEX(0x03, E2G, add)
         IDEX(0x09, G2E, or)
         IDEXW(0x0a, E2G, or, 1)
-        EX(0x0f, 2byte_esc)
+        EX(0x0f, 2byte_esc)//
         IDEX(0x11, G2E, adc)
         IDEX(0x13, E2G, adc)
+        IDEX(0x1b, E2G, sbb)
         IDEX(0x29, G2E, sub)
+        IDEX(0x2b, E2G, sub) // sub
         IDEXW(0x30, G2E, xor, 1)
         IDEX(0x31, G2E, xor)
         IDEX(0x33, E2G, xor)
         IDEX(0x35, I2a, xor)
+        IDEXW(0x38, G2E, cmp, 1)
         IDEX(0x39, G2E, cmp)
         // decode_G2E
         IDEX(0x3b, E2G, cmp)
@@ -254,6 +266,7 @@ again:
         IDEX(0x46, r, inc)
         IDEX(0x47, r, inc)
         IDEX(0x48, r, dec)
+        IDEX(0x49, r, dec)
         IDEX(0x4a, r, dec)
         IDEX(0x4b, r, dec)
         IDEX(0x50, r, push)
@@ -278,6 +291,7 @@ again:
         IDEXW(0x6a, push_SI, push, 1)
         IDEXW(0x74, J, jcc, 1) // width=?1
         IDEXW(0x75, J, jcc, 1)
+        IDEXW(0x76, J, jcc, 1) // jbe,jna
         IDEXW(0x79, J, jcc, 1)
         IDEXW(0x7c, J, jcc, 1)
         IDEXW(0x7d, J, jcc, 1)
@@ -326,6 +340,7 @@ again:
         IDEXW(0xc6, mov_I2E, mov, 1)
         IDEX(0xc7, mov_I2E, mov)
         EX(0xc9, leave)
+        // exec_leave
         IDEXW(0xd0, gp2_1_E, gp2, 1)
         IDEX(0xd1, gp2_1_E, gp2)
         IDEXW(0xd2, gp2_cl2E, gp2, 1)
@@ -337,7 +352,8 @@ again:
         IDEX(0xf7, E, gp3)
         IDEXW(0xfe, E, gp4, 1)
         IDEX(0xff, E, gp5) //
-    case 0x66              // movw
+        // decode_E
+    case 0x66 // movw
         :
         s->isa.is_operand_size_16 = true;
         goto again;
